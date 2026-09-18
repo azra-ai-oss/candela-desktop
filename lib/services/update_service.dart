@@ -145,15 +145,8 @@ class UpdateService extends ChangeNotifier {
         return null;
       }
 
-      final cleanCurrent =
-          currentVersion.trim().startsWith('v') ||
-              currentVersion.trim().startsWith('V')
-          ? currentVersion.trim().substring(1)
-          : currentVersion.trim();
-      final latest =
-          tagName.trim().startsWith('v') || tagName.trim().startsWith('V')
-          ? tagName.trim().substring(1)
-          : tagName.trim();
+      final cleanCurrent = _cleanVersion(currentVersion);
+      final latest = _cleanVersion(tagName);
       _latestVersion = latest;
 
       if (isNewer(latest, cleanCurrent)) {
