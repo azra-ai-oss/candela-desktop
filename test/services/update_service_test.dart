@@ -100,6 +100,9 @@ void main() {
     test('higher pre-release is newer than lower pre-release', () {
       expect(UpdateService.isNewer('0.2.0-beta.2', '0.2.0-beta.1'), isTrue);
       expect(UpdateService.isNewer('0.2.0-beta.1', '0.2.0-beta.2'), isFalse);
+      // Numeric pre-release precedence: beta.10 > beta.2
+      expect(UpdateService.isNewer('0.8.2-beta.10', '0.8.2-beta.2'), isTrue);
+      expect(UpdateService.isNewer('0.8.2-beta.2', '0.8.2-beta.10'), isFalse);
     });
 
     test('build number suffix is stripped for comparison', () {

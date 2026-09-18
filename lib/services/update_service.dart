@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:pub_semver/pub_semver.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'brew_service.dart';
@@ -197,47 +198,22 @@ class UpdateService extends ChangeNotifier {
 
   /// Semver comparison: is [a] newer than [b]?
   static bool isNewer(String a, String b) {
-    final aParsed = _parseSemver(a);
-    final bParsed = _parseSemver(b);
-
-    for (var i = 0; i < 3; i++) {
-      if (aParsed.version[i] > bParsed.version[i]) return true;
-      if (aParsed.version[i] < bParsed.version[i]) return false;
+    try {
+      final vA = Version.parse(_cleanVersion(a));
+      final vB = Version.parse(_cleanVersion(b));
+      return vA > vB;
+    } catch (_) {
+      return false;
     }
-
-    if (aParsed.preRelease == null && bParsed.preRelease != null) return true;
-    if (aParsed.preRelease != null && bParsed.preRelease == null) return false;
-    if (aParsed.preRelease != null && bParsed.preRelease != null) {
-      return aParsed.preRelease!.compareTo(bParsed.preRelease!) > 0;
-    }
-
-    return false;
   }
 
-  static _SemverParts _parseSemver(String version) {
-    if (version.startsWith('v') || version.startsWith('V')) {
-      version = version.substring(1);
+  static String _cleanVersion(String v) {
+    v = v.trim();
+    if (v.startsWith('v') || v.startsWith('V')) {
+      v = v.substring(1);
     }
-
-    final plusIdx = version.indexOf('+');
-    final withoutBuild = plusIdx == -1
-        ? version
-        : version.substring(0, plusIdx);
-
-    final dashIdx = withoutBuild.indexOf('-');
-    final base = dashIdx == -1
-        ? withoutBuild
-        : withoutBuild.substring(0, dashIdx);
-    final preRelease = dashIdx == -1
-        ? null
-        : withoutBuild.substring(dashIdx + 1);
-
-    final parts = base.split('.').map((s) => int.tryParse(s) ?? 0).toList();
-    while (parts.length < 3) {
-      parts.add(0);
-    }
-
-    return _SemverParts(parts.sublist(0, 3), preRelease);
+    final plusIdx = v.indexOf('+');
+    return plusIdx == -1 ? v : v.substring(0, plusIdx);
   }
 
   /// Perform a Homebrew cask upgrade and relaunch the app.
@@ -289,10 +265,4 @@ class UpdateService extends ChangeNotifier {
     _client.close();
     super.dispose();
   }
-}
-
-class _SemverParts {
-  final List<int> version;
-  final String? preRelease;
-  const _SemverParts(this.version, this.preRelease);
 }
