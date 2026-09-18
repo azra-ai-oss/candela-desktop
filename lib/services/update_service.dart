@@ -44,6 +44,7 @@ class UpdateService extends ChangeNotifier {
   final http.Client _client;
   final ProcessRunner _runner;
   final BrewService _brew;
+  final void Function(int code) _onExit;
 
   String? _latestVersion;
   InstallChannel? _cachedChannel;
@@ -63,10 +64,15 @@ class UpdateService extends ChangeNotifier {
     }
   }
 
-  UpdateService({http.Client? client, ProcessRunner? runner, BrewService? brew})
-    : _client = client ?? http.Client(),
-      _runner = runner ?? const SystemProcessRunner(),
-      _brew = brew ?? BrewService(runner: runner);
+  UpdateService({
+    http.Client? client,
+    ProcessRunner? runner,
+    BrewService? brew,
+    void Function(int code)? onExit,
+  }) : _client = client ?? http.Client(),
+       _runner = runner ?? const SystemProcessRunner(),
+       _brew = brew ?? BrewService(runner: runner),
+       _onExit = onExit ?? exit;
 
   /// Current update status.
   UpdateStatus get status => _status;
@@ -138,10 +144,18 @@ class UpdateService extends ChangeNotifier {
         return null;
       }
 
-      final latest = tagName.startsWith('v') ? tagName.substring(1) : tagName;
+      final cleanCurrent =
+          currentVersion.trim().startsWith('v') ||
+              currentVersion.trim().startsWith('V')
+          ? currentVersion.trim().substring(1)
+          : currentVersion.trim();
+      final latest =
+          tagName.trim().startsWith('v') || tagName.trim().startsWith('V')
+          ? tagName.trim().substring(1)
+          : tagName.trim();
       _latestVersion = latest;
 
-      if (isNewer(latest, currentVersion)) {
+      if (isNewer(latest, cleanCurrent)) {
         _setStatus(UpdateStatus.available);
         return latest;
       } else {
@@ -235,9 +249,21 @@ class UpdateService extends ChangeNotifier {
     if (!Platform.isMacOS) return false;
     _setStatus(UpdateStatus.checking);
     try {
-      final result = await _brew.upgradeCask('candelahq/tap/candela-desktop');
+      var result = await _brew.upgradeCask('candelahq/tap/candela-desktop');
+      if (!result.success) {
+        result = await _brew.upgrade('candelahq/tap/candela-desktop');
+      }
+      if (!result.success) {
+        result = await _brew.upgradeCask('candela-desktop');
+      }
+      if (!result.success) {
+        result = await _brew.upgrade('candela');
+      }
 
       if (!result.success) {
+        debugPrint(
+          '[UpdateService] brew upgrade failed: ${result.errorMessage}',
+        );
         _setStatus(UpdateStatus.error);
         return false;
       }
@@ -248,8 +274,10 @@ class UpdateService extends ChangeNotifier {
         'Candela',
       ], mode: ProcessStartMode.detached);
 
-      exit(0);
-    } catch (_) {
+      _onExit(0);
+      return true;
+    } catch (e) {
+      debugPrint('[UpdateService] Error performing brew upgrade: $e');
       _setStatus(UpdateStatus.error);
       return false;
     }
